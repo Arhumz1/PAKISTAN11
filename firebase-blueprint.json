@@ -1,0 +1,16 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profiles",
+      "description": "User profile with SMS phone verification details",
+      "fields": {
+        "uid": { "type": "string", "description": "User authentication ID" },
+        "fullName": { "type": "string", "description": "User full name" },
+        "phoneNumber": { "type": "string", "description": "Verified phone number" },
+        "cnic": { "type": "string", "description": "CNIC number" },
+        "email": { "type": "string", "description": "Email address" },
+        "createdAt": { "type": "string", "description": "Registration ISO timestamp" }
+      }
+    }
+  }
+}

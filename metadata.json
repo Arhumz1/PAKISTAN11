@@ -1,0 +1,8 @@
+{
+  "name": "National Digital Citizen Portal",
+  "description": "Comprehensive full-stack citizen services platform for passports, taxes, identity, credit, licenses, and public utilities.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
