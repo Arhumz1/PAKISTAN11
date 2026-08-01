@@ -10,6 +10,8 @@ import {
   signInWithEmailAndPassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  setPersistence,
+  browserSessionPersistence,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -31,6 +33,13 @@ import firebaseConfig from "../../firebase-applet-config.json";
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
+
+// Keep authentication only for the current browser tab session. Closing the
+// portal/browser clears Firebase's stored session, so the next visit requires
+// a new sign-in rather than silently restoring the previous account.
+export const authSessionReady = setPersistence(auth, browserSessionPersistence).catch((err) => {
+  console.warn("[Firebase Auth] Could not enable session-only persistence:", err);
+});
 
 /** Use one comparable E.164 representation for SMS and stored profiles. */
 export const normalizePhoneNumber = (phoneNumber: string): string => {

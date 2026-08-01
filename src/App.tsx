@@ -19,7 +19,7 @@ import { NotificationsModal } from "./components/NotificationsModal";
 
 import { ActiveTab, UserProfile, PassportDetails, VehicleRecord, PropertyRecord, TaxFilingRecord } from "./types";
 import { initialUserProfile, initialPassportDetails, vehiclesData, propertiesData, taxHistoryData } from "./data/mockData";
-import { auth, getUserProfileFromFirestore, saveUserProfileToFirestore } from "./lib/firebase";
+import { auth, authSessionReady, getUserProfileFromFirestore, saveUserProfileToFirestore } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
 export function App() {
@@ -114,18 +114,29 @@ export function App() {
 
   // Listen to Firebase Auth state change & restore profile strictly from Firestore
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        console.log("[Firebase Auth] Active authenticated session detected UID:", fbUser.uid);
-        await loadUserProfile(fbUser.uid, fbUser);
-      } else {
-        console.log("[Firebase Auth] No active auth session.");
-        setIsAuthenticated(false);
-        setIsLoadingProfile(false);
-      }
+    let disposed = false;
+    let unsubscribe = () => {};
+
+    // Wait until Firebase has selected session-only persistence before reading
+    // an auth state, preventing an old persistent session from being restored.
+    void authSessionReady.finally(() => {
+      if (disposed) return;
+      unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+        if (fbUser) {
+          console.log("[Firebase Auth] Active authenticated session detected UID:", fbUser.uid);
+          await loadUserProfile(fbUser.uid, fbUser);
+        } else {
+          console.log("[Firebase Auth] No active auth session.");
+          setIsAuthenticated(false);
+          setIsLoadingProfile(false);
+        }
+      });
     });
 
-    return () => unsubscribe();
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
   }, [loadUserProfile]);
 
   // Sync dark mode class
