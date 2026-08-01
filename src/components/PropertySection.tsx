@@ -10,14 +10,17 @@ import {
   X,
   PlusCircle,
   Building,
+  Trash2,
 } from "lucide-react";
 import { PropertyRecord, UserProfile } from "../types";
+import { SecurityVerifyModal } from "./SecurityVerifyModal";
 
 interface PropertySectionProps {
   user?: UserProfile;
   isNewAccount?: boolean;
   properties: PropertyRecord[];
   onAddProperty: (newProperty: PropertyRecord) => void;
+  onRemoveProperty?: (khasraNo: string) => void;
 }
 
 export const PropertySection: React.FC<PropertySectionProps> = ({
@@ -25,9 +28,11 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
   isNewAccount,
   properties,
   onAddProperty,
+  onRemoveProperty,
 }) => {
   const [selectedFard, setSelectedFard] = useState<PropertyRecord | null>(null);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [propertyToRemove, setPropertyToRemove] = useState<PropertyRecord | null>(null);
 
   // Property Form State
   const [propForm, setPropForm] = useState({
@@ -120,9 +125,18 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
                   <Home className="w-5 h-5 text-emerald-600" />
                   <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{prop.khasraNo}</span>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  {prop.propertyType}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                    {prop.propertyType}
+                  </span>
+                  <button
+                    onClick={() => setPropertyToRemove(prop)}
+                    title="Remove Property / House"
+                    className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold text-xs transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 text-xs">
@@ -278,6 +292,22 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
           </div>
         </div>
       )}
+
+      {/* Security Verification Modal for Property Removal */}
+      <SecurityVerifyModal
+        isOpen={!!propertyToRemove}
+        onClose={() => setPropertyToRemove(null)}
+        onVerified={() => {
+          if (propertyToRemove && onRemoveProperty) {
+            onRemoveProperty(propertyToRemove.khasraNo);
+            alert(`Property / House "${propertyToRemove.khasraNo}" successfully removed from your citizen record.`);
+            setPropertyToRemove(null);
+          }
+        }}
+        title={`Remove Property "${propertyToRemove?.khasraNo || ""}"`}
+        subtitle="Identity verification via Passkey PIN or Phone OTP is required to remove a property title or house holding from your national profile."
+        userMobile={user?.mobile}
+      />
     </div>
   );
 };

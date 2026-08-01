@@ -122,13 +122,18 @@ export interface PropertyRecord {
 
 export interface UtilityBill {
   id: string;
-  serviceType: "Electricity (IESCO)" | "Gas (SNGPL)" | "Water (CDA)" | "Telecom (PTCL)";
+  serviceType: string;
   consumerNumber: string;
   dueDate: string;
   amount: number;
   status: "Paid" | "Unpaid";
   billingMonth: string;
   unitsConsumed: number;
+  paidAtDate?: string;
+  paidAtTimePKT?: string;
+  paidAtDisplay?: string;
+  propertyKhasra?: string;
+  ownershipShare?: string;
 }
 
 export interface NotificationItem {

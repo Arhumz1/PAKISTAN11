@@ -760,8 +760,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error("No portal account is linked to this verified phone number. Please sign up first or sign in with email/CNIC.");
       }
 
-      // 2. Preserve the complete registered profile and use the Firebase-
-      // verified phone number as the authoritative value.
+      // Preserve all registered profile fields with the Firebase-verified phone.
       const userObj: UserProfile = {
         ...existingProfile,
         id: firebaseUid,

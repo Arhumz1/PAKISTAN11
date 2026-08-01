@@ -10,9 +10,11 @@ import {
   CreditCard,
   Navigation,
   Wallet,
+  Trash2,
 } from "lucide-react";
 import { VehicleRecord, UserProfile } from "../types";
 import { auth, saveUserProfileToFirestore } from "../lib/firebase";
+import { SecurityVerifyModal } from "./SecurityVerifyModal";
 
 interface LicenseVehicleSectionProps {
   user?: UserProfile;
@@ -20,6 +22,7 @@ interface LicenseVehicleSectionProps {
   vehicles: VehicleRecord[];
   onAddVehicle: (newVehicle: VehicleRecord) => void;
   onUpdateVehicles?: (vehicles: VehicleRecord[]) => void;
+  onRemoveVehicle?: (registrationNo: string) => void;
 }
 
 export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
@@ -28,9 +31,32 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
   vehicles,
   onAddVehicle,
   onUpdateVehicles,
+  onRemoveVehicle,
 }) => {
   const [showLicenseQr, setShowLicenseQr] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+
+  // Helper function to generate account-specific token tax valid-until date
+  const generateAccountTokenTaxDate = (accountIdentifier: string, regNo: string): string => {
+    const dates = [
+      "31-DEC-2025",
+      "31-MAR-2026",
+      "30-JUN-2026",
+      "30-SEP-2026",
+      "31-DEC-2026",
+      "31-MAR-2027",
+      "30-JUN-2027",
+      "30-SEP-2027",
+    ];
+    let hash = 0;
+    const str = (accountIdentifier || "CITIZEN") + "::" + (regNo || "REG");
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    const idx = Math.abs(hash) % dates.length;
+    return dates[idx];
+  };
   const [showMtagModal, setShowMtagModal] = useState(false);
 
   // M-Tag Recharge Confirmation State
@@ -169,6 +195,7 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
   // Token Tax Modal State
   const [selectedTaxVehicle, setSelectedTaxVehicle] = useState<VehicleRecord | null>(null);
   const [taxPaidReceipt, setTaxPaidReceipt] = useState<{ psaid: string; date: string; amount: number } | null>(null);
+  const [vehicleToRemove, setVehicleToRemove] = useState<VehicleRecord | null>(null);
 
   // New Vehicle Form State
   const [vehicleForm, setVehicleForm] = useState({
@@ -194,14 +221,45 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
   const handleConfirmPayTokenTax = () => {
     if (!selectedTaxVehicle) return;
     const taxAmount = calculateTokenTax(selectedTaxVehicle.engineCc);
+    const accountKey = user?.cnic || user?.id || "account";
+    const currentTaxDate =
+      selectedTaxVehicle.tokenTaxPaidUntil ||
+      generateAccountTokenTaxDate(accountKey, selectedTaxVehicle.registrationNo);
+
+    let nextPaidDate = "30-JUN-2028 (Paid)";
+    if (currentTaxDate.includes("2025")) {
+      nextPaidDate = currentTaxDate.replace("2025", "2026") + " (Paid)";
+    } else if (currentTaxDate.includes("2026")) {
+      nextPaidDate = currentTaxDate.replace("2026", "2027") + " (Paid)";
+    } else if (currentTaxDate.includes("2027")) {
+      nextPaidDate = currentTaxDate.replace("2027", "2028") + " (Paid)";
+    } else if (!currentTaxDate.includes("(Paid)")) {
+      nextPaidDate = currentTaxDate + " (Paid)";
+    }
+
     const updated = vehicles.map((v) =>
       v.registrationNo === selectedTaxVehicle.registrationNo
-        ? { ...v, tokenTaxPaidUntil: "30-JUN-2028", status: "Clear" as const }
+        ? {
+            ...v,
+            tokenTaxPaidUntil: nextPaidDate,
+            status: "Clear" as const,
+            isTokenTaxPaid: true,
+          }
         : v
     );
+
     if (onUpdateVehicles) {
       onUpdateVehicles(updated);
     }
+
+    // Save strictly to Firestore users/{uid}
+    const targetUid = auth.currentUser?.uid || user?.id;
+    if (targetUid) {
+      saveUserProfileToFirestore(targetUid, { vehicles: updated })
+        .then(() => console.log("[Firestore] Vehicles token tax saved to Firestore!"))
+        .catch((err) => console.error("Error saving vehicles to Firestore:", err));
+    }
+
     const psaid = "PSID-ICT-" + Math.floor(10000000 + Math.random() * 90000000);
     setTaxPaidReceipt({
       psaid,
@@ -216,12 +274,15 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
       alert("Please enter a valid Registration Number (e.g. ICT-LE-8821)");
       return;
     }
+    const accountKey = user?.cnic || user?.id || "account";
+    const initialTaxDate = generateAccountTokenTaxDate(accountKey, vehicleForm.registrationNo.toUpperCase());
+
     const newVeh: VehicleRecord = {
       registrationNo: vehicleForm.registrationNo.toUpperCase(),
       chassisNo: vehicleForm.chassisNo || "NHA-CHS-" + Math.floor(100000 + Math.random() * 900000),
       makeModel: vehicleForm.makeModel || "Standard Vehicle",
       year: Number(vehicleForm.year) || 2025,
-      tokenTaxPaidUntil: "30-JUN-2027",
+      tokenTaxPaidUntil: initialTaxDate,
       status: "Clear",
       engineCc: Number(vehicleForm.engineCc) || 1300,
     };
@@ -340,37 +401,68 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {vehicles.map((v, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
-                >
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                        {v.registrationNo}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        {v.engineCc} CC
-                      </span>
-                    </div>
-                    <p className="text-zinc-500 mt-1">
-                      {v.makeModel} ({v.year}) • Chassis #{v.chassisNo}
-                    </p>
-                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold mt-0.5">
-                      Token Tax Valid Until: {v.tokenTaxPaidUntil}
-                    </p>
-                  </div>
+              {vehicles.map((v, idx) => {
+                const accountKey = user?.cnic || user?.id || "account";
+                const effectiveTaxDate =
+                  v.tokenTaxPaidUntil && v.tokenTaxPaidUntil !== "30-JUN-2027"
+                    ? v.tokenTaxPaidUntil
+                    : generateAccountTokenTaxDate(accountKey, v.registrationNo);
 
-                  <button
-                    onClick={() => handleOpenTokenTaxModal(v)}
-                    className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs shrink-0 flex items-center space-x-1.5 shadow-sm"
+                const isPaid = Boolean(
+                  v.isTokenTaxPaid ||
+                  effectiveTaxDate.includes("2028") ||
+                  effectiveTaxDate.toLowerCase().includes("paid")
+                );
+
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
                   >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    <span>Pay Token Tax (PKR {calculateTokenTax(v.engineCc).toLocaleString()})</span>
-                  </button>
-                </div>
-              ))}
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                          {v.registrationNo}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          {v.engineCc} CC
+                        </span>
+                      </div>
+                      <p className="text-zinc-500 mt-1">
+                        {v.makeModel} ({v.year}) • Chassis #{v.chassisNo}
+                      </p>
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold mt-0.5">
+                        Token Tax Valid Until: {effectiveTaxDate}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      {isPaid ? (
+                        <div className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center space-x-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>Token Tax Paid</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenTokenTaxModal(v)}
+                          className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs flex items-center space-x-1.5 shadow-sm"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Pay Token Tax (PKR {calculateTokenTax(v.engineCc).toLocaleString()})</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => setVehicleToRemove(v)}
+                        title="Remove Vehicle"
+                        className="p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold text-xs transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -744,6 +836,22 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
           </div>
         </div>
       )}
+
+      {/* Security Verification Modal for Vehicle Removal */}
+      <SecurityVerifyModal
+        isOpen={!!vehicleToRemove}
+        onClose={() => setVehicleToRemove(null)}
+        onVerified={() => {
+          if (vehicleToRemove && onRemoveVehicle) {
+            onRemoveVehicle(vehicleToRemove.registrationNo);
+            alert(`Vehicle ${vehicleToRemove.registrationNo} successfully removed from your citizen profile.`);
+            setVehicleToRemove(null);
+          }
+        }}
+        title={`Remove Vehicle ${vehicleToRemove?.registrationNo || ""}`}
+        subtitle="Identity verification via Passkey PIN or Phone OTP is required to remove a vehicle record from your national profile."
+        userMobile={user?.mobile}
+      />
     </div>
   );
 };

@@ -235,6 +235,22 @@ export function App() {
     });
   };
 
+  const handleRemoveVehicle = (registrationNo: string) => {
+    setVehicles((prev) => {
+      const next = prev.filter((v) => v.registrationNo !== registrationNo);
+      saveUserAssets(next, properties, taxFilings, declaredIncome);
+      return next;
+    });
+  };
+
+  const handleRemoveProperty = (khasraNo: string) => {
+    setProperties((prev) => {
+      const next = prev.filter((p) => p.khasraNo !== khasraNo);
+      saveUserAssets(vehicles, next, taxFilings, declaredIncome);
+      return next;
+    });
+  };
+
   const handleFileTaxReturn = (newFiling: TaxFilingRecord) => {
     setTaxFilings((prev) => {
       const next = [newFiling, ...prev];
@@ -432,6 +448,7 @@ export function App() {
                 vehicles={vehicles}
                 onAddVehicle={handleAddVehicle}
                 onUpdateVehicles={handleUpdateVehicles}
+                onRemoveVehicle={handleRemoveVehicle}
               />
             )}
 
@@ -441,6 +458,7 @@ export function App() {
                 isNewAccount={isNewAccount}
                 properties={properties}
                 onAddProperty={handleAddProperty}
+                onRemoveProperty={handleRemoveProperty}
               />
             )}
 
