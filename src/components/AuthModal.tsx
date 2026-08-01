@@ -34,6 +34,7 @@ import {
   saveUserProfileToFirestore,
   getUserProfileFromFirestore,
   getUserProfileByPhoneNumber,
+  findUserProfileInFirestore,
   normalizePhoneNumber,
   registerWithFirebaseEmail,
   loginWithFirebaseEmail,
