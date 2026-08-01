@@ -17,6 +17,8 @@ export type ActiveTab =
 
 export interface UserProfile {
   id: string;
+  /** Stable Firestore document identity shared by password, SMS, and passkey access. */
+  profileId?: string;
   fullName: string;
   email: string;
   mobile: string;
@@ -58,6 +60,7 @@ export interface UserProfile {
   taxFilings?: TaxFilingRecord[];
   declaredIncome?: number;
   preferences?: { darkMode?: boolean; langUrdu?: boolean };
+  activityLog?: Array<{ type: string; description: string; at: string }>;
   attestedDegrees?: any[];
   utilityBills?: UtilityBill[];
   mtagBalance?: number;

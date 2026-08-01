@@ -19,7 +19,7 @@ import { NotificationsModal } from "./components/NotificationsModal";
 
 import { ActiveTab, UserProfile, PassportDetails, VehicleRecord, PropertyRecord, TaxFilingRecord } from "./types";
 import { initialUserProfile, initialPassportDetails, vehiclesData, propertiesData, taxHistoryData } from "./data/mockData";
-import { auth, authSessionReady, getUserProfileFromFirestore, saveUserProfileToFirestore } from "./lib/firebase";
+import { auth, authSessionReady, getUserProfileFromFirestore, recordAccountActivity, saveUserProfileToFirestore } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
 export function App() {
@@ -83,16 +83,19 @@ export function App() {
       setUser({
         ...fullProfile,
         id: uid,
+        profileId: fullProfile.profileId || uid,
         atlStatus: fullProfile.atlStatus || "INACTIVE",
       });
 
-      if (Array.isArray(fullProfile.vehicles)) setVehicles(fullProfile.vehicles);
-      if (Array.isArray(fullProfile.properties)) setProperties(fullProfile.properties);
-      if (Array.isArray(fullProfile.taxFilings)) setTaxFilings(fullProfile.taxFilings);
-      if (typeof fullProfile.declaredIncome === "number") setDeclaredIncome(fullProfile.declaredIncome);
-      if (fullProfile.passport) setPassport(fullProfile.passport);
-      if (fullProfile.preferences?.darkMode !== undefined) setDarkMode(fullProfile.preferences.darkMode);
-      if (fullProfile.preferences?.langUrdu !== undefined) setLangUrdu(fullProfile.preferences.langUrdu);
+      // Reset missing values as well. This prevents one citizen's local screen
+      // data from appearing if a different citizen signs in on the same device.
+      setVehicles(Array.isArray(fullProfile.vehicles) ? fullProfile.vehicles : []);
+      setProperties(Array.isArray(fullProfile.properties) ? fullProfile.properties : []);
+      setTaxFilings(Array.isArray(fullProfile.taxFilings) ? fullProfile.taxFilings : []);
+      setDeclaredIncome(typeof fullProfile.declaredIncome === "number" ? fullProfile.declaredIncome : 0);
+      setPassport(fullProfile.passport || initialPassportDetails);
+      setDarkMode(Boolean(fullProfile.preferences?.darkMode));
+      setLangUrdu(Boolean(fullProfile.preferences?.langUrdu));
 
       setIsAuthenticated(true);
     } catch (err: any) {
@@ -153,23 +156,32 @@ export function App() {
     const finalProfile: UserProfile = {
       ...loggedInUser,
       id: targetUid,
+      profileId: loggedInUser.profileId || targetUid,
       lastLogin: new Date().toISOString(),
     };
 
     // Save strictly to Firestore users/{uid}
     try {
       await saveUserProfileToFirestore(targetUid, finalProfile);
+      await recordAccountActivity(targetUid, {
+        type: isNew ? "account_created" : "sign_in",
+        description: isNew ? "Citizen account created and verified." : "Citizen signed in and restored their saved profile.",
+      });
     } catch (err) {
       console.error("[Firestore] Error saving user profile on login success:", err);
     }
 
     setUser(finalProfile);
-    setIsNewAccount(true);
+    setIsNewAccount(Boolean(isNew));
     setIsAuthenticated(true);
     setShowAuthModal(false);
   };
 
   const handleLogout = () => {
+    const targetUid = auth.currentUser?.uid || user.id;
+    if (targetUid) {
+      recordAccountActivity(targetUid, { type: "sign_out", description: "Citizen signed out of the portal." }).catch(() => {});
+    }
     try {
       auth.signOut().catch(() => {});
     } catch (e) {}
@@ -186,6 +198,7 @@ export function App() {
     const fullUpdatedProfile: UserProfile = {
       ...updatedUser,
       id: targetUid,
+      profileId: updatedUser.profileId || targetUid,
     };
 
     setUser(fullUpdatedProfile);
@@ -193,6 +206,7 @@ export function App() {
     // Save updated profile to Firestore immediately
     try {
       await saveUserProfileToFirestore(targetUid, fullUpdatedProfile);
+      await recordAccountActivity(targetUid, { type: "profile_updated", description: "Citizen profile details were updated." });
       console.log("[Firestore] Profile updated successfully in Firestore users/" + targetUid);
     } catch (err) {
       console.error("[Firestore Error] Failed to update profile in Firestore:", err);
@@ -206,7 +220,8 @@ export function App() {
     updatedProperties: PropertyRecord[],
     updatedTaxFilings: TaxFilingRecord[],
     updatedIncome: number,
-    updatedPassport?: PassportDetails
+    updatedPassport?: PassportDetails,
+    activity?: { type: string; description: string }
   ) => {
     const targetUid = auth.currentUser?.uid || user.id;
     if (!targetUid) return;
@@ -219,6 +234,7 @@ export function App() {
         declaredIncome: updatedIncome,
         ...(updatedPassport ? { passport: updatedPassport } : {}),
       });
+      if (activity) await recordAccountActivity(targetUid, activity);
       console.log("[Firestore] Account assets saved to users/" + targetUid);
     } catch (err) {
       console.error("[Firestore Error] Failed to save user assets to Firestore:", err);
@@ -228,20 +244,20 @@ export function App() {
   const handleAddVehicle = (newVehicle: VehicleRecord) => {
     setVehicles((prev) => {
       const next = [newVehicle, ...prev];
-      saveUserAssets(next, properties, taxFilings, declaredIncome);
+      saveUserAssets(next, properties, taxFilings, declaredIncome, undefined, { type: "vehicle_added", description: `Vehicle ${newVehicle.registrationNo} was added.` });
       return next;
     });
   };
 
   const handleUpdateVehicles = (updatedVehicles: VehicleRecord[]) => {
     setVehicles(updatedVehicles);
-    saveUserAssets(updatedVehicles, properties, taxFilings, declaredIncome);
+      saveUserAssets(updatedVehicles, properties, taxFilings, declaredIncome, undefined, { type: "vehicles_updated", description: "Vehicle records were updated." });
   };
 
   const handleAddProperty = (newProperty: PropertyRecord) => {
     setProperties((prev) => {
       const next = [newProperty, ...prev];
-      saveUserAssets(vehicles, next, taxFilings, declaredIncome);
+      saveUserAssets(vehicles, next, taxFilings, declaredIncome, undefined, { type: "property_added", description: `Property ${newProperty.khasraNo} was added.` });
       return next;
     });
   };
@@ -249,7 +265,7 @@ export function App() {
   const handleRemoveVehicle = (registrationNo: string) => {
     setVehicles((prev) => {
       const next = prev.filter((v) => v.registrationNo !== registrationNo);
-      saveUserAssets(next, properties, taxFilings, declaredIncome);
+      saveUserAssets(next, properties, taxFilings, declaredIncome, undefined, { type: "vehicle_removed", description: `Vehicle ${registrationNo} was removed.` });
       return next;
     });
   };
@@ -257,7 +273,7 @@ export function App() {
   const handleRemoveProperty = (khasraNo: string) => {
     setProperties((prev) => {
       const next = prev.filter((p) => p.khasraNo !== khasraNo);
-      saveUserAssets(vehicles, next, taxFilings, declaredIncome);
+      saveUserAssets(vehicles, next, taxFilings, declaredIncome, undefined, { type: "property_removed", description: `Property ${khasraNo} was removed.` });
       return next;
     });
   };
@@ -268,7 +284,13 @@ export function App() {
       const newInc = newFiling.declaredIncome;
       setDeclaredIncome(newInc);
       setUser((u) => ({ ...u, atlStatus: "ACTIVE" }));
-      saveUserAssets(vehicles, properties, next, newInc);
+      saveUserAssets(vehicles, properties, next, newInc, undefined, { type: "tax_return_filed", description: `Tax return for ${newFiling.taxYear} was filed.` });
+      const targetUid = auth.currentUser?.uid || user.id;
+      if (targetUid) {
+        saveUserProfileToFirestore(targetUid, { atlStatus: "ACTIVE" }).catch((err) =>
+          console.warn("[Firestore] Unable to save taxpayer status:", err)
+        );
+      }
       return next;
     });
   };
@@ -424,7 +446,10 @@ export function App() {
                 langUrdu={langUrdu}
                 onApplyPassport={(updated) => {
                   setPassport(updated);
-                  saveUserAssets(vehicles, properties, taxFilings, declaredIncome, updated);
+                  saveUserAssets(vehicles, properties, taxFilings, declaredIncome, updated, {
+                    type: "passport_application_updated",
+                    description: "Passport application details were saved.",
+                  });
                 }}
               />
             )}
