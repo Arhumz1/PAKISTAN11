@@ -32,19 +32,24 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({ user }) => {
   const [showFrcModal, setShowFrcModal] = useState(false);
   const [frcStep, setFrcStep] = useState<"form" | "certificate">("form");
   const [frcCategory, setFrcCategory] = useState<"birth" | "marriage">("birth");
-  const [familyMembers, setFamilyMembers] = useState<Array<{ name: string; cnic: string; relation: string; age: number }>>([
-    { name: user.fatherName || "Father Record", cnic: "61101-9923181-1", relation: "Father", age: 58 },
-    { name: user.motherName || "Mother Record", cnic: "61101-8812314-2", relation: "Mother", age: 54 },
-    { name: user.fullName, cnic: user.cnic, relation: "Applicant (Self)", age: 28 },
-  ]);
+  const [familyMembers, setFamilyMembers] = useState<Array<{ name: string; cnic: string; relation: string; age: number | string }>>([]);
 
   React.useEffect(() => {
-    setFamilyMembers([
-      { name: user.fatherName || "Father Record", cnic: "61101-9923181-1", relation: "Father", age: 58 },
-      { name: user.motherName || "Mother Record", cnic: "61101-8812314-2", relation: "Mother", age: 54 },
-      { name: user.fullName, cnic: user.cnic, relation: "Applicant (Self)", age: 28 },
-    ]);
-  }, [user.fatherName, user.motherName, user.fullName, user.cnic]);
+    const members: Array<{ name: string; cnic: string; relation: string; age: number | string }> = [
+      { name: user.fatherName ? `${user.fatherName}${user.fatherDob ? ` (DOB: ${user.fatherDob})` : ""}` : "Father Record", cnic: "61101-9923181-1", relation: "Father", age: user.fatherDob ? user.fatherDob : 58 },
+      { name: user.motherName ? `${user.motherName}${user.motherDob ? ` (DOB: ${user.motherDob})` : ""}` : "Mother Record", cnic: "61101-8812314-2", relation: "Mother", age: user.motherDob ? user.motherDob : 54 },
+      { name: user.fullName, cnic: user.cnic || "61101-0000000-0", relation: "Applicant (Self)", age: user.dob ? user.dob : 28 },
+    ];
+    if (user.hasSiblings === "Yes") {
+      members.push({
+        name: user.numberOfSiblings ? `Siblings (${user.numberOfSiblings})` : "Sibling Record",
+        cnic: "61101-3312984-5",
+        relation: "Sibling",
+        age: "Family Member",
+      });
+    }
+    setFamilyMembers(members);
+  }, [user.fatherName, user.fatherDob, user.motherName, user.motherDob, user.fullName, user.cnic, user.dob, user.hasSiblings, user.numberOfSiblings]);
   const [newMember, setNewMember] = useState({ name: "", cnic: "", relation: "Sibling", age: 22 });
   const [frcTrackingId, setFrcTrackingId] = useState("");
 
@@ -180,12 +185,12 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({ user }) => {
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1 border-t border-emerald-800/60">
                 <div>
-                  <p className="text-[9px] text-emerald-300 uppercase font-semibold">Father Name</p>
-                  <p className="text-xs text-emerald-100 font-medium">{user.fatherName || "Not Provided"}</p>
+                  <p className="text-[9px] text-emerald-300 uppercase font-semibold">Father Name & DOB</p>
+                  <p className="text-xs text-emerald-100 font-medium">{user.fatherName || "Not Provided"}{user.fatherDob ? ` (${user.fatherDob})` : ""}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-emerald-300 uppercase font-semibold">Mother Name</p>
-                  <p className="text-xs text-emerald-100 font-medium">{user.motherName || "Not Provided"}</p>
+                  <p className="text-[9px] text-emerald-300 uppercase font-semibold">Mother Name & DOB</p>
+                  <p className="text-xs text-emerald-100 font-medium">{user.motherName || "Not Provided"}{user.motherDob ? ` (${user.motherDob})` : ""}</p>
                 </div>
               </div>
             </div>

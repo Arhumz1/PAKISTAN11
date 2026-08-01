@@ -173,9 +173,9 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
   // New Vehicle Form State
   const [vehicleForm, setVehicleForm] = useState({
     registrationNo: "",
-    makeModel: "Toyota Corolla 1.8",
-    year: 2024,
-    engineCc: 1800,
+    makeModel: "",
+    year: "",
+    engineCc: "",
     chassisNo: "",
   });
 
@@ -219,13 +219,20 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
     const newVeh: VehicleRecord = {
       registrationNo: vehicleForm.registrationNo.toUpperCase(),
       chassisNo: vehicleForm.chassisNo || "NHA-CHS-" + Math.floor(100000 + Math.random() * 900000),
-      makeModel: vehicleForm.makeModel,
-      year: vehicleForm.year,
+      makeModel: vehicleForm.makeModel || "Standard Vehicle",
+      year: Number(vehicleForm.year) || 2025,
       tokenTaxPaidUntil: "30-JUN-2027",
       status: "Clear",
-      engineCc: vehicleForm.engineCc,
+      engineCc: Number(vehicleForm.engineCc) || 1300,
     };
     onAddVehicle(newVeh);
+    setVehicleForm({
+      registrationNo: "",
+      makeModel: "",
+      year: "",
+      engineCc: "",
+      chassisNo: "",
+    });
     setShowRegisterModal(false);
     alert(`Vehicle ${newVeh.registrationNo} successfully registered under Excise & Taxation portal!`);
   };
@@ -405,9 +412,10 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
                   <input
                     type="text"
                     required
+                    placeholder="e.g. Honda Civic or Toyota Corolla"
                     value={vehicleForm.makeModel}
                     onChange={(e) => setVehicleForm({ ...vehicleForm, makeModel: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800"
+                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100"
                   />
                 </div>
 
@@ -418,9 +426,10 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
                   <input
                     type="number"
                     required
+                    placeholder="e.g. 2024"
                     value={vehicleForm.year}
-                    onChange={(e) => setVehicleForm({ ...vehicleForm, year: Number(e.target.value) })}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 font-mono"
+                    onChange={(e) => setVehicleForm({ ...vehicleForm, year: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
                   />
                 </div>
               </div>
@@ -433,9 +442,10 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
                   <input
                     type="number"
                     required
+                    placeholder="e.g. 1800"
                     value={vehicleForm.engineCc}
-                    onChange={(e) => setVehicleForm({ ...vehicleForm, engineCc: Number(e.target.value) })}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 font-mono"
+                    onChange={(e) => setVehicleForm({ ...vehicleForm, engineCc: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
                   />
                 </div>
 

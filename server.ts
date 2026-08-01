@@ -110,7 +110,7 @@ async function startServer() {
     };
   }
 
-  // WebAuthn challenges are one-time and short-lived to prevent replay.
+  // WebAuthn challenges are single-use and expire promptly to prevent replay.
   const WEBAUTHN_CHALLENGE_TTL_MS = 5 * 60 * 1000;
   type StoredChallenge = { value: string; expiresAt: number };
   const challengesMap = new Map<string, StoredChallenge>();

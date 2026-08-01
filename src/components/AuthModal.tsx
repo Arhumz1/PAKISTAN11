@@ -82,8 +82,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [signupForm, setSignupForm] = useState({
     fullName: "",
     fatherName: "",
+    fatherDob: "",
     motherName: "",
-    occupation: "Government Service",
+    motherDob: "",
+    hasSiblings: "No",
+    numberOfSiblings: "",
+    occupation: "",
     maritalStatus: "Single",
     bloodGroup: "B+",
     email: "",
@@ -121,8 +125,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSignupForm({
       fullName: "",
       fatherName: "",
+      fatherDob: "",
       motherName: "",
-      occupation: "Government Service",
+      motherDob: "",
+      hasSiblings: "No",
+      numberOfSiblings: "",
+      occupation: "",
       maritalStatus: "Single",
       bloodGroup: "B+",
       email: "",
@@ -343,9 +351,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           atlStatus: targetUser.atlStatus || "INACTIVE",
           bloodGroup: targetUser.bloodGroup || signupForm.bloodGroup || "B+",
           fatherName: targetUser.fatherName || signupForm.fatherName || "Citizen Record",
+          fatherDob: targetUser.fatherDob || signupForm.fatherDob || "",
           motherName: targetUser.motherName || signupForm.motherName || "Citizen Mother Record",
+          motherDob: targetUser.motherDob || signupForm.motherDob || "",
+          hasSiblings: targetUser.hasSiblings || signupForm.hasSiblings || "No",
+          numberOfSiblings: targetUser.numberOfSiblings || signupForm.numberOfSiblings || "",
           maritalStatus: targetUser.maritalStatus || signupForm.maritalStatus || "Single",
-          occupation: targetUser.occupation || signupForm.occupation || "Government Service",
+          occupation: targetUser.occupation || signupForm.occupation || "",
           twoFactorEnabled: true,
           hasPasskey: true,
           passkeys: passkeyObj ? [passkeyObj] : targetUser.passkeys || [],
@@ -534,9 +546,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           atlStatus: "INACTIVE",
           bloodGroup: data.user.bloodGroup || signupForm.bloodGroup || "B+",
           fatherName: data.user.fatherName || signupForm.fatherName || "Citizen Father Record",
+          fatherDob: signupForm.fatherDob || "",
           motherName: data.user.motherName || signupForm.motherName || "Citizen Mother Record",
+          motherDob: signupForm.motherDob || "",
+          hasSiblings: signupForm.hasSiblings || "No",
+          numberOfSiblings: signupForm.numberOfSiblings || "",
           maritalStatus: data.user.maritalStatus || signupForm.maritalStatus || "Single",
-          occupation: data.user.occupation || signupForm.occupation || "Government Service",
+          occupation: data.user.occupation || signupForm.occupation || "",
           twoFactorEnabled: true,
           hasPasskey: false,
           passkeys: [],
@@ -744,7 +760,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error("No portal account is linked to this verified phone number. Please sign up first or sign in with email/CNIC.");
       }
 
-      // 2. Use the profile linked to the number confirmed by Firebase.
+      // 2. Preserve the complete registered profile and use the Firebase-
+      // verified phone number as the authoritative value.
       const userObj: UserProfile = {
         ...existingProfile,
         id: firebaseUid,
@@ -1288,6 +1305,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                    Father's Date of Birth *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={signupForm.fatherDob}
+                    onChange={(e) => setSignupForm({ ...signupForm, fatherDob: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
                     Mother's Full Name *
                   </label>
                   <div className="relative">
@@ -1302,19 +1334,62 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     />
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                    Mother's Date of Birth *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={signupForm.motherDob}
+                    onChange={(e) => setSignupForm({ ...signupForm, motherDob: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                    Do you have any siblings? *
+                  </label>
+                  <select
+                    value={signupForm.hasSiblings}
+                    onChange={(e) => setSignupForm({ ...signupForm, hasSiblings: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+
+                {signupForm.hasSiblings === "Yes" && (
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Number of Siblings / Details
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 2 siblings (1 brother, 1 sister)"
+                      value={signupForm.numberOfSiblings}
+                      onChange={(e) => setSignupForm({ ...signupForm, numberOfSiblings: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                    Occupation / Profession *
+                    Occupation / Profession
                   </label>
                   <div className="relative">
                     <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input
                       type="text"
-                      required
-                      placeholder="e.g. Software Engineer"
+                      placeholder="e.g. Software Engineer or Public Sector"
                       value={signupForm.occupation}
                       onChange={(e) => setSignupForm({ ...signupForm, occupation: e.target.value })}
                       className="w-full pl-10 pr-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-emerald-600 focus:outline-none"

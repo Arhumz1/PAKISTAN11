@@ -68,8 +68,8 @@ export function App() {
       const firestoreDoc = await getUserProfileFromFirestore(uid);
 
       if (!firestoreDoc) {
-        // Firebase authentication alone must never unlock the portal or create
-        // a generic profile. The login flow creates a real profile first.
+        // Firebase credentials alone must not unlock the portal or create a
+        // blank profile. Successful registration/login creates the real record.
         console.info("[Firestore] No portal profile is linked to UID:", uid);
         setIsAuthenticated(false);
         return;

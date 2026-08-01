@@ -34,7 +34,11 @@ export interface UserProfile {
   atlStatus: "ACTIVE" | "INACTIVE";
   bloodGroup: string;
   fatherName: string;
+  fatherDob?: string;
   motherName?: string;
+  motherDob?: string;
+  hasSiblings?: string;
+  numberOfSiblings?: string;
   maritalStatus: string;
   occupation: string;
   twoFactorEnabled: boolean;

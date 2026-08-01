@@ -31,27 +31,36 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
 
   // Property Form State
   const [propForm, setPropForm] = useState({
-    khasraNo: "Plot 42, Sector F-11/2",
-    district: "Islamabad",
-    tehsil: "ICT Islamabad",
-    areaSqFt: 2250, // 10 Marla
+    khasraNo: "",
+    district: "",
+    tehsil: "",
+    areaSqFt: "",
     propertyType: "Residential Plot" as const,
     ownershipShare: "100% Sole Owner",
-    estimatedValue: 35000000, // 3.5 Crore
+    estimatedValue: "",
   });
 
   const handleRegisterPropertySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newProp: PropertyRecord = {
-      khasraNo: propForm.khasraNo || "Khasra " + Math.floor(100 + Math.random() * 900),
-      district: propForm.district,
-      tehsil: propForm.tehsil,
-      areaSqFt: propForm.areaSqFt,
+      khasraNo: propForm.khasraNo || "House/Plot " + Math.floor(100 + Math.random() * 900),
+      district: propForm.district || "Islamabad",
+      tehsil: propForm.tehsil || "ICT Islamabad",
+      areaSqFt: Number(propForm.areaSqFt) || 2250,
       propertyType: propForm.propertyType,
-      ownershipShare: propForm.ownershipShare,
-      estimatedValue: propForm.estimatedValue,
+      ownershipShare: propForm.ownershipShare || "100% Sole Owner",
+      estimatedValue: Number(propForm.estimatedValue) || 10000000,
     };
     onAddProperty(newProp);
+    setPropForm({
+      khasraNo: "",
+      district: "",
+      tehsil: "",
+      areaSqFt: "",
+      propertyType: "Residential Plot" as const,
+      ownershipShare: "100% Sole Owner",
+      estimatedValue: "",
+    });
     setShowRegisterModal(false);
     alert(`Property ${newProp.khasraNo} successfully registered on E-Zameen Digital Cadastre! Certified digital title generated.`);
   };
@@ -187,9 +196,10 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
                   <input
                     type="text"
                     required
+                    placeholder="e.g. Islamabad or Lahore"
                     value={propForm.district}
                     onChange={(e) => setPropForm({ ...propForm, district: e.target.value, tehsil: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800"
+                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100"
                   />
                 </div>
               </div>
@@ -202,9 +212,10 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
                   <input
                     type="number"
                     required
+                    placeholder="e.g. 2250"
                     value={propForm.areaSqFt}
-                    onChange={(e) => setPropForm({ ...propForm, areaSqFt: Number(e.target.value) })}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 font-mono"
+                    onChange={(e) => setPropForm({ ...propForm, areaSqFt: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
                   />
                 </div>
 
@@ -215,9 +226,10 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
                   <input
                     type="number"
                     required
+                    placeholder="e.g. 35000000"
                     value={propForm.estimatedValue}
-                    onChange={(e) => setPropForm({ ...propForm, estimatedValue: Number(e.target.value) })}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 font-mono text-emerald-600 font-bold"
+                    onChange={(e) => setPropForm({ ...propForm, estimatedValue: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs font-mono text-emerald-600 font-bold"
                   />
                 </div>
               </div>
