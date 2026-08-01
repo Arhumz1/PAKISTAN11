@@ -5,14 +5,10 @@ import {
   signInWithPhoneNumber,
   ConfirmationResult,
   PhoneAuthProvider,
+  signInWithCredential,
   UserCredential,
-  linkWithCredential,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  setPersistence,
-  browserSessionPersistence,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -34,13 +30,6 @@ import firebaseConfig from "../../firebase-applet-config.json";
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
-
-// Keep authentication only for the current browser tab session. Closing the
-// portal/browser clears Firebase's stored session, so the next visit requires
-// a new sign-in rather than silently restoring the previous account.
-export const authSessionReady = setPersistence(auth, browserSessionPersistence).catch((err) => {
-  console.warn("[Firebase Auth] Could not enable session-only persistence:", err);
-});
 
 /** Use one comparable E.164 representation for SMS and stored profiles. */
 export const normalizePhoneNumber = (phoneNumber: string): string => {
@@ -231,53 +220,6 @@ export const sendPhoneAuthCode = async (
   }
 };
 
-/** Sends an SMS during signup so the verified phone is linked to the same Firebase user as the password. */
-export const sendPhoneLinkCode = async (phoneNumber: string, verifier: RecaptchaVerifier): Promise<string> => {
-  if (!auth.currentUser) throw new Error("Your sign-up session has ended. Please create the account again.");
-  const formattedPhone = normalizePhoneNumber(phoneNumber);
-  if (!formattedPhone) throw new Error("A valid mobile number is required.");
-
-  const provider = new PhoneAuthProvider(auth);
-  return provider.verifyPhoneNumber({ phoneNumber: formattedPhone }, verifier);
-};
-
-/** Finishes signup by attaching the verified phone provider to the existing Firebase account. */
-export const confirmPhoneLinkCode = async (verificationId: string, code: string): Promise<UserCredential> => {
-  if (!auth.currentUser) throw new Error("Your sign-up session has ended. Please create the account again.");
-  const credential = PhoneAuthProvider.credential(verificationId, code.trim());
-  return linkWithCredential(auth.currentUser, credential);
-};
-
-/** Sends a genuine Firebase SMS challenge for re-authenticating the active account. */
-export const sendPhoneReauthenticationCode = async (
-  phoneNumber: string,
-  verifier: RecaptchaVerifier
-): Promise<string> => {
-  if (!auth.currentUser) throw new Error("Please sign in again before confirming this change.");
-  const formattedPhone = normalizePhoneNumber(phoneNumber);
-  if (!formattedPhone) throw new Error("A registered mobile number is required.");
-
-  const provider = new PhoneAuthProvider(auth);
-  return provider.verifyPhoneNumber({ phoneNumber: formattedPhone }, verifier);
-};
-
-/** Verifies the actual Firebase SMS code without switching to a different user. */
-export const confirmPhoneReauthenticationCode = async (verificationId: string, code: string) => {
-  if (!auth.currentUser) throw new Error("Your session has ended. Please sign in again.");
-  const credential = PhoneAuthProvider.credential(verificationId, code.trim());
-  return reauthenticateWithCredential(auth.currentUser, credential);
-};
-
-/** Re-authenticates the active email/password account before a sensitive action. */
-export const reauthenticateWithPassword = async (password: string) => {
-  const currentUser = auth.currentUser;
-  if (!currentUser?.email) {
-    throw new Error("This session was not signed in with email and password. Use your registered passkey or SMS instead.");
-  }
-  const credential = EmailAuthProvider.credential(currentUser.email, password);
-  return reauthenticateWithCredential(currentUser, credential);
-};
-
 /**
  * Confirms OTP code sent via SMS
  */
@@ -307,56 +249,17 @@ export const saveUserProfileToFirestore = async (userId: string, profileData: an
       return;
     }
     const userRef = doc(db, "users", targetUid);
-    const phoneValue = profileData?.mobile ?? profileData?.phoneNumber;
-    const createdAt = profileData?.createdAt || profileData?.registrationDate;
     const dataToSave = cleanUndefinedFields({
       ...profileData,
-      ...(phoneValue ? {
-        mobile: normalizePhoneNumber(phoneValue),
-        phoneNumber: normalizePhoneNumber(phoneValue),
-      } : {}),
+      mobile: normalizePhoneNumber(profileData?.mobile || profileData?.phoneNumber || ""),
+      phoneNumber: normalizePhoneNumber(profileData?.phoneNumber || profileData?.mobile || ""),
       id: targetUid,
       uid: targetUid,
       updatedAt: new Date().toISOString(),
-      ...(createdAt ? { createdAt } : {}),
+      createdAt: profileData?.createdAt || profileData?.registrationDate || new Date().toISOString()
     });
     await setDoc(userRef, dataToSave, { merge: true });
     console.log("[Firestore] User profile saved successfully to users/" + targetUid);
-  });
-};
-
-/** Adds a durable, timestamped account-history entry without replacing profile data. */
-export const recordAccountActivity = async (
-  userId: string,
-  activity: { type: string; description: string }
-) => {
-  const targetUid = userId || auth.currentUser?.uid;
-  if (!targetUid) return;
-  const entry = {
-    ...activity,
-    at: new Date().toISOString(),
-  };
-  return retryFirestoreOp(async () => {
-    await setDoc(
-      doc(db, "users", targetUid),
-      { activityLog: arrayUnion(entry), updatedAt: new Date().toISOString() },
-      { merge: true }
-    );
-  });
-};
-
-/** Find the portal profile attached to a Firebase-verified phone number. */
-export const getUserProfileByPhoneNumber = async (phoneNumber: string) => {
-  const normalizedPhone = normalizePhoneNumber(phoneNumber);
-  if (!normalizedPhone) return null;
-
-  return retryFirestoreOp(async () => {
-    const users = collection(db, "users");
-    const result = await getDocs(query(users, where("phoneNumber", "==", normalizedPhone), limit(1)));
-    return result.empty ? null : { ...result.docs[0].data(), id: result.docs[0].id };
-  }).catch((err) => {
-    console.error("Error finding profile by verified phone number:", err);
-    return null;
   });
 };
 
@@ -372,11 +275,26 @@ export const getUserProfileFromFirestore = async (userId: string) => {
     if (snap.exists()) {
       const data = snap.data();
       console.log("[Firestore] Retrieved user profile from users/" + targetUid);
-      return { ...data, id: snap.id };
+      return data;
     } else {
       console.warn("[Firestore] No user document found at users/" + targetUid);
       return null;
     }
+  });
+};
+
+/** Find the portal profile attached to a Firebase-verified phone number. */
+export const getUserProfileByPhoneNumber = async (phoneNumber: string) => {
+  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+  if (!normalizedPhone) return null;
+
+  return retryFirestoreOp(async () => {
+    const users = collection(db, "users");
+    const result = await getDocs(query(users, where("phoneNumber", "==", normalizedPhone), limit(1)));
+    return result.empty ? null : { id: result.docs[0].id, ...result.docs[0].data() };
+  }).catch((err) => {
+    console.error("Error finding profile by verified phone number:", err);
+    return null;
   });
 };
 
@@ -392,7 +310,7 @@ export const findUserProfileInFirestore = async (identifier: string) => {
   try {
     const directSnap = await getDoc(doc(db, "users", clean));
     if (directSnap.exists()) {
-      return { ...directSnap.data(), id: directSnap.id };
+      return directSnap.data();
     }
   } catch (e) {}
 
@@ -403,18 +321,18 @@ export const findUserProfileInFirestore = async (identifier: string) => {
     if (clean.includes("@")) {
       const q = query(usersRef, where("email", "==", clean.toLowerCase()));
       const snap = await getDocs(q);
-      if (!snap.empty) return { ...snap.docs[0].data(), id: snap.docs[0].id };
+      if (!snap.empty) return snap.docs[0].data();
     }
 
     const digitsOnly = clean.replace(/\D/g, "");
     if (digitsOnly.length >= 7) {
       const qCnic = query(usersRef, where("cnic", "==", clean));
       const snapCnic = await getDocs(qCnic);
-      if (!snapCnic.empty) return { ...snapCnic.docs[0].data(), id: snapCnic.docs[0].id };
+      if (!snapCnic.empty) return snapCnic.docs[0].data();
 
       const qMobile = query(usersRef, where("mobile", "==", clean));
       const snapMobile = await getDocs(qMobile);
-      if (!snapMobile.empty) return { ...snapMobile.docs[0].data(), id: snapMobile.docs[0].id };
+      if (!snapMobile.empty) return snapMobile.docs[0].data();
 
       // Scan collection documents as fallback
       const allDocs = await getDocs(usersRef);
@@ -426,7 +344,7 @@ export const findUserProfileInFirestore = async (identifier: string) => {
           (digitsOnly && (uMobileDigits === digitsOnly || uCnicDigits === digitsOnly)) ||
           (u.email && u.email.toLowerCase() === clean.toLowerCase())
         ) {
-          return { ...u, id: d.id };
+          return u;
         }
       }
     }
