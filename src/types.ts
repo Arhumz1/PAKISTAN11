@@ -134,6 +134,7 @@ export interface UtilityBill {
   paidAtDisplay?: string;
   propertyKhasra?: string;
   ownershipShare?: string;
+  issueDate?: string;
 }
 
 export interface NotificationItem {

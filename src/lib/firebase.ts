@@ -5,10 +5,11 @@ import {
   signInWithPhoneNumber,
   ConfirmationResult,
   PhoneAuthProvider,
-  signInWithCredential,
   UserCredential,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -220,6 +221,36 @@ export const sendPhoneAuthCode = async (
   }
 };
 
+/** Sends a genuine Firebase SMS challenge for re-authenticating the active account. */
+export const sendPhoneReauthenticationCode = async (
+  phoneNumber: string,
+  verifier: RecaptchaVerifier
+): Promise<string> => {
+  if (!auth.currentUser) throw new Error("Please sign in again before confirming this change.");
+  const formattedPhone = normalizePhoneNumber(phoneNumber);
+  if (!formattedPhone) throw new Error("A registered mobile number is required.");
+
+  const provider = new PhoneAuthProvider(auth);
+  return provider.verifyPhoneNumber({ phoneNumber: formattedPhone }, verifier);
+};
+
+/** Verifies the actual Firebase SMS code without switching to a different user. */
+export const confirmPhoneReauthenticationCode = async (verificationId: string, code: string) => {
+  if (!auth.currentUser) throw new Error("Your session has ended. Please sign in again.");
+  const credential = PhoneAuthProvider.credential(verificationId, code.trim());
+  return reauthenticateWithCredential(auth.currentUser, credential);
+};
+
+/** Re-authenticates the active email/password account before a sensitive action. */
+export const reauthenticateWithPassword = async (password: string) => {
+  const currentUser = auth.currentUser;
+  if (!currentUser?.email) {
+    throw new Error("This session was not signed in with email and password. Use your registered passkey or SMS instead.");
+  }
+  const credential = EmailAuthProvider.credential(currentUser.email, password);
+  return reauthenticateWithCredential(currentUser, credential);
+};
+
 /**
  * Confirms OTP code sent via SMS
  */
@@ -263,6 +294,21 @@ export const saveUserProfileToFirestore = async (userId: string, profileData: an
   });
 };
 
+/** Find the portal profile attached to a Firebase-verified phone number. */
+export const getUserProfileByPhoneNumber = async (phoneNumber: string) => {
+  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+  if (!normalizedPhone) return null;
+
+  return retryFirestoreOp(async () => {
+    const users = collection(db, "users");
+    const result = await getDocs(query(users, where("phoneNumber", "==", normalizedPhone), limit(1)));
+    return result.empty ? null : { id: result.docs[0].id, ...result.docs[0].data() };
+  }).catch((err) => {
+    console.error("Error finding profile by verified phone number:", err);
+    return null;
+  });
+};
+
 /**
  * Retrieves user profile data from Firestore database
  */
@@ -280,21 +326,6 @@ export const getUserProfileFromFirestore = async (userId: string) => {
       console.warn("[Firestore] No user document found at users/" + targetUid);
       return null;
     }
-  });
-};
-
-/** Find the portal profile attached to a Firebase-verified phone number. */
-export const getUserProfileByPhoneNumber = async (phoneNumber: string) => {
-  const normalizedPhone = normalizePhoneNumber(phoneNumber);
-  if (!normalizedPhone) return null;
-
-  return retryFirestoreOp(async () => {
-    const users = collection(db, "users");
-    const result = await getDocs(query(users, where("phoneNumber", "==", normalizedPhone), limit(1)));
-    return result.empty ? null : { id: result.docs[0].id, ...result.docs[0].data() };
-  }).catch((err) => {
-    console.error("Error finding profile by verified phone number:", err);
-    return null;
   });
 };
 

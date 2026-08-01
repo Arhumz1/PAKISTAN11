@@ -48,18 +48,60 @@ export const UtilityBillsSection: React.FC<UtilityBillsSectionProps> = ({
     return isNaN(num) ? 100 : Math.min(100, Math.max(1, num));
   };
 
-  // Helper to generate monthly bills based on registered properties & ownership share
+  // Helper to format today's PKT date or any date into DD-MMM-YYYY (e.g., 31-JUL-2026)
+  const formatPktDueDate = (dateStr?: string): string => {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const dayPadded = String(d.getDate()).padStart(2, "0");
+    const monthsAbbr = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    return `${dayPadded}-${monthsAbbr[d.getMonth()]}-${d.getFullYear()}`;
+  };
+
+  // Helper to calculate next cycle: paying on July 31 shows next bill issued Aug 31 and due Sep 30
+  const getNextCycleInfo = (currentDueDateStr: string, currentBillingMonthStr: string) => {
+    const fullMonths = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const monthsAbbr = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+    let dayNum = 31;
+    let monthIdx = 6; // July
+    let year = 2026;
+
+    if (currentDueDateStr) {
+      const parts = currentDueDateStr.split("-");
+      if (parts.length === 3) {
+        dayNum = parseInt(parts[0], 10) || 31;
+        const mIdx = monthsAbbr.indexOf(parts[1].toUpperCase());
+        if (mIdx !== -1) monthIdx = mIdx;
+        year = parseInt(parts[2], 10) || 2026;
+      }
+    }
+
+    // Next issue date is 1 month later (e.g., July 31 -> August 31)
+    let issueMonthIdx = (monthIdx + 1) % 12;
+    let issueYear = monthIdx === 11 ? year + 1 : year;
+    const maxDaysInIssueMonth = new Date(issueYear, issueMonthIdx + 1, 0).getDate();
+    const issueDay = Math.min(dayNum, maxDaysInIssueMonth);
+    const nextIssueDate = `${String(issueDay).padStart(2, "0")}-${monthsAbbr[issueMonthIdx]}-${issueYear}`;
+    const nextMonthName = `${fullMonths[issueMonthIdx]} ${issueYear} (PKT)`;
+
+    // Next due date is 1 month after next issue date (e.g., August 31 -> September 30)
+    let dueMonthIdx = (issueMonthIdx + 1) % 12;
+    let dueYear = issueMonthIdx === 11 ? issueYear + 1 : issueYear;
+    const maxDaysInDueMonth = new Date(dueYear, dueMonthIdx + 1, 0).getDate();
+    const dueDay = Math.min(issueDay, maxDaysInDueMonth);
+    const nextDueDate = `${String(dueDay).padStart(2, "0")}-${monthsAbbr[dueMonthIdx]}-${dueYear}`;
+
+    return { nextMonthName, nextIssueDate, nextDueDate };
+  };
+
+  // Helper to generate initial monthly bills for registered properties
   const generateMonthlyBills = (propsList: PropertyRecord[]): UtilityBill[] => {
     if (propsList.length === 0) return [];
 
     const generated: UtilityBill[] = [];
-
-    // Monthly cycle variations for different amounts each month
-    const cycles = [
-      { monthName: "July 2026 (PKT)", dueDate: "15-JUL-2026", elecMult: 1.0, gasMult: 0.95, wtrMult: 1.0 },
-      { monthName: "August 2026 (PKT)", dueDate: "15-AUG-2026", elecMult: 1.18, gasMult: 0.88, wtrMult: 1.08 },
-      { monthName: "September 2026 (PKT)", dueDate: "15-SEP-2026", elecMult: 1.08, gasMult: 1.12, wtrMult: 0.96 },
-    ];
+    const todayDueDate = formatPktDueDate(); // e.g. "31-JUL-2026"
 
     propsList.forEach((prop, pIdx) => {
       const sharePct = parseOwnershipSharePct(prop.ownershipShare);
@@ -67,51 +109,52 @@ export const UtilityBillsSection: React.FC<UtilityBillsSectionProps> = ({
       const area = prop.areaSqFt || 2000;
       const cleanKhasra = prop.khasraNo.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase() || `PROP${pIdx + 1}`;
 
-      cycles.forEach((cycle, cIdx) => {
-        // Electricity (IESCO)
-        const baseElec = Math.round((2100 + area * 1.5) * shareRatio * cycle.elecMult);
-        generated.push({
-          id: `IESCO-${cleanKhasra}-M${cIdx + 1}`,
-          serviceType: `Electricity (IESCO) - ${prop.khasraNo}`,
-          consumerNumber: `14-2201-${100000 + pIdx * 100 + cIdx}`,
-          dueDate: cycle.dueDate,
-          amount: Math.round(baseElec / 10) * 10,
-          status: "Unpaid",
-          billingMonth: cycle.monthName,
-          unitsConsumed: Math.round((120 + area * 0.08) * cycle.elecMult),
-          propertyKhasra: prop.khasraNo,
-          ownershipShare: prop.ownershipShare,
-        });
+      // Electricity (IESCO)
+      const baseElec = Math.round((2100 + area * 1.5) * shareRatio);
+      generated.push({
+        id: `IESCO-${cleanKhasra}-JUL26`,
+        serviceType: `Electricity (IESCO) - ${prop.khasraNo}`,
+        consumerNumber: `14-2201-${100000 + pIdx * 100}`,
+        issueDate: todayDueDate,
+        dueDate: todayDueDate,
+        amount: Math.round(baseElec / 10) * 10,
+        status: "Unpaid",
+        billingMonth: "July 2026 (PKT)",
+        unitsConsumed: Math.round(120 + area * 0.08),
+        propertyKhasra: prop.khasraNo,
+        ownershipShare: prop.ownershipShare,
+      });
 
-        // Gas (SNGPL)
-        const baseGas = Math.round((650 + area * 0.4) * shareRatio * cycle.gasMult);
-        generated.push({
-          id: `SNGPL-${cleanKhasra}-M${cIdx + 1}`,
-          serviceType: `Gas (SNGPL) - ${prop.khasraNo}`,
-          consumerNumber: `08-9921-${200000 + pIdx * 100 + cIdx}`,
-          dueDate: cycle.dueDate,
-          amount: Math.round(baseGas / 10) * 10,
-          status: "Unpaid",
-          billingMonth: cycle.monthName,
-          unitsConsumed: Math.round((18 + area * 0.005) * cycle.gasMult),
-          propertyKhasra: prop.khasraNo,
-          ownershipShare: prop.ownershipShare,
-        });
+      // Gas (SNGPL)
+      const baseGas = Math.round((650 + area * 0.4) * shareRatio);
+      generated.push({
+        id: `SNGPL-${cleanKhasra}-JUL26`,
+        serviceType: `Gas (SNGPL) - ${prop.khasraNo}`,
+        consumerNumber: `08-9921-${200000 + pIdx * 100}`,
+        issueDate: todayDueDate,
+        dueDate: todayDueDate,
+        amount: Math.round(baseGas / 10) * 10,
+        status: "Unpaid",
+        billingMonth: "July 2026 (PKT)",
+        unitsConsumed: Math.round(18 + area * 0.005),
+        propertyKhasra: prop.khasraNo,
+        ownershipShare: prop.ownershipShare,
+      });
 
-        // Water (CDA / WASA)
-        const baseWater = Math.round((350 + area * 0.15) * shareRatio * cycle.wtrMult);
-        generated.push({
-          id: `WASA-${cleanKhasra}-M${cIdx + 1}`,
-          serviceType: `Water & Municipal (CDA) - ${prop.khasraNo}`,
-          consumerNumber: `CDA-WTR-${300000 + pIdx * 100 + cIdx}`,
-          dueDate: cycle.dueDate,
-          amount: Math.round(baseWater / 10) * 10,
-          status: "Unpaid",
-          billingMonth: cycle.monthName,
-          unitsConsumed: 12,
-          propertyKhasra: prop.khasraNo,
-          ownershipShare: prop.ownershipShare,
-        });
+      // Water (CDA / WASA)
+      const baseWater = Math.round((350 + area * 0.15) * shareRatio);
+      generated.push({
+        id: `WASA-${cleanKhasra}-JUL26`,
+        serviceType: `Water & Municipal (CDA) - ${prop.khasraNo}`,
+        consumerNumber: `CDA-WTR-${300000 + pIdx * 100}`,
+        issueDate: todayDueDate,
+        dueDate: todayDueDate,
+        amount: Math.round(baseWater / 10) * 10,
+        status: "Unpaid",
+        billingMonth: "July 2026 (PKT)",
+        unitsConsumed: 12,
+        propertyKhasra: prop.khasraNo,
+        ownershipShare: prop.ownershipShare,
       });
     });
 
@@ -156,15 +199,20 @@ export const UtilityBillsSection: React.FC<UtilityBillsSectionProps> = ({
   const handlePayBill = (id: string) => {
     const now = new Date();
     const pktDateStr = getTodayPakistanDate(); // YYYY-MM-DD
-    const pktTimeStr = now.toLocaleTimeString("en-PK", {
-      timeZone: "Asia/Karachi",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }) + " PKT";
+    const pktTimeStr =
+      now.toLocaleTimeString("en-PK", {
+        timeZone: "Asia/Karachi",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      }) + " PKT";
     const paidAtDisplay = `${pktDateStr} at ${pktTimeStr}`;
 
-    const updated = bills.map((b) =>
+    const targetBill = bills.find((b) => b.id === id);
+    if (!targetBill) return;
+
+    // 1. Mark target bill as Paid
+    const updatedBills = bills.map((b) =>
       b.id === id
         ? {
             ...b,
@@ -176,23 +224,64 @@ export const UtilityBillsSection: React.FC<UtilityBillsSectionProps> = ({
         : b
     );
 
-    setBills(updated);
+    // 2. Calculate details for next month's bill
+    const { nextMonthName, nextIssueDate, nextDueDate } = getNextCycleInfo(
+      targetBill.dueDate,
+      targetBill.billingMonth
+    );
 
-    // Save strictly to Firestore user document
+    // Check if next month's bill already exists for this consumer number
+    const nextBillExists = updatedBills.some(
+      (b) =>
+        b.consumerNumber === targetBill.consumerNumber &&
+        b.billingMonth === nextMonthName
+    );
+
+    if (!nextBillExists) {
+      // Calculate a slightly varied amount for next month's consumption (±10% variation)
+      const randomFactor = 0.92 + Math.random() * 0.18; // 0.92 to 1.10 multiplier
+      const nextAmount = Math.max(200, Math.round((targetBill.amount * randomFactor) / 10) * 10);
+      const nextUnits = Math.max(10, Math.round(targetBill.unitsConsumed * randomFactor));
+
+      const cleanService = targetBill.serviceType.split("-")[0].replace(/[^a-zA-Z]/g, "").slice(0, 5).toUpperCase();
+      const nextBillId = `${cleanService}-${targetBill.consumerNumber.slice(-4)}-${Date.now().toString().slice(-4)}`;
+
+      const newNextBill: UtilityBill = {
+        id: nextBillId,
+        serviceType: targetBill.serviceType,
+        consumerNumber: targetBill.consumerNumber,
+        issueDate: nextIssueDate,
+        dueDate: nextDueDate,
+        amount: nextAmount,
+        status: "Unpaid",
+        billingMonth: nextMonthName,
+        unitsConsumed: nextUnits,
+        propertyKhasra: targetBill.propertyKhasra,
+        ownershipShare: targetBill.ownershipShare,
+      };
+
+      updatedBills.push(newNextBill);
+    }
+
+    setBills(updatedBills);
+
+    // 3. Save strictly to Firestore user document
     const targetUid = auth.currentUser?.uid || user?.id;
     if (targetUid) {
-      saveUserProfileToFirestore(targetUid, { utilityBills: updated })
+      saveUserProfileToFirestore(targetUid, { utilityBills: updatedBills })
         .then(() => {
-          console.log("[Firestore] Paid utility bill updated & saved to Firestore!");
+          console.log("[Firestore] Utility bills updated (Paid + Next Month generated) in Firestore!");
         })
-        .catch((err) => console.error("Error saving paid bill to Firestore:", err));
+        .catch((err) => console.error("Error saving utility bills to Firestore:", err));
     }
 
     if (cnicKey && cnicKey !== "default") {
-      localStorage.setItem(`citizen_bills_${cnicKey}`, JSON.stringify(updated));
+      localStorage.setItem(`citizen_bills_${cnicKey}`, JSON.stringify(updatedBills));
     }
 
-    alert(`Bill #${id} successfully paid! Receipt timestamped ${paidAtDisplay} in Pakistan and saved to Firestore.`);
+    alert(
+      `Bill successfully paid! Timestamped ${paidAtDisplay} in Pakistan and saved to Firestore.\n\nNext bill generated (${nextMonthName}):\n• Issued / Visible: ${nextIssueDate}\n• Due Date: ${nextDueDate}`
+    );
   };
 
   const hasProperties = properties.length > 0;
@@ -333,9 +422,12 @@ export const UtilityBillsSection: React.FC<UtilityBillsSectionProps> = ({
                           <strong className="text-emerald-700 dark:text-emerald-400">{bill.ownershipShare}</strong>
                         </p>
                       )}
-                      <p className="text-[11px]">
-                        <span className="text-zinc-400">Consumption Units:</span>{" "}
-                        <strong>{bill.unitsConsumed} Units</strong> • Due Date: {bill.dueDate}
+                      <p className="text-[11px] flex flex-wrap items-center gap-x-1.5">
+                        <span><span className="text-zinc-400">Units:</span> <strong>{bill.unitsConsumed}</strong></span>
+                        <span className="text-zinc-400">•</span>
+                        <span><span className="text-zinc-400">Issued:</span> <strong>{bill.issueDate || bill.dueDate}</strong></span>
+                        <span className="text-zinc-400">•</span>
+                        <span><span className="text-zinc-400">Due:</span> <strong className="text-emerald-700 dark:text-emerald-400">{bill.dueDate}</strong></span>
                       </p>
                     </div>
 

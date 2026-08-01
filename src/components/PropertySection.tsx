@@ -305,10 +305,9 @@ export const PropertySection: React.FC<PropertySectionProps> = ({
           }
         }}
         title={`Remove Property "${propertyToRemove?.khasraNo || ""}"`}
-        subtitle="Identity verification via Passkey PIN or Phone OTP is required to remove a property title or house holding from your national profile."
-        userMobile={user?.mobile}
+        subtitle="Confirm again with the same passkey, password, or Firebase SMS verification used to sign in before removing this property."
+        user={user}
       />
     </div>
   );
 };
-

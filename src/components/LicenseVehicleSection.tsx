@@ -849,10 +849,9 @@ export const LicenseVehicleSection: React.FC<LicenseVehicleSectionProps> = ({
           }
         }}
         title={`Remove Vehicle ${vehicleToRemove?.registrationNo || ""}`}
-        subtitle="Identity verification via Passkey PIN or Phone OTP is required to remove a vehicle record from your national profile."
-        userMobile={user?.mobile}
+        subtitle="Confirm again with the same passkey, password, or Firebase SMS verification used to sign in before removing this vehicle."
+        user={user}
       />
     </div>
   );
 };
-
